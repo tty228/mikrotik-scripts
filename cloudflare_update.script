@@ -45,6 +45,7 @@
 :global lastUpdateTime
 :global previousIPv4
 :global previousIPv6
+:local updateUrl
 :local currentTime [/system clock get time]
 :local currentDate [/system clock get date]
 :local timeStr [:totime ($currentDate . " " . $currentTime)]
@@ -160,14 +161,14 @@
 
 			# === 提交域名解析记录 ===
 			:if ($recordId != "") do={
-				:local updateUrl "https://api.cloudflare.com/client/v4/zones/$CFzoneid/dns_records/$recordId"
+				:set updateUrl "https://api.cloudflare.com/client/v4/zones/$CFzoneid/dns_records/$recordId"
 				:if ($Debug) do={
 					:log info "[DEBUG] 正在更新记录: $updateUrl"
 					:log info "[DEBUG] 提交数据: $postData"
 				}
 			} else={
 				# 创建新记录
-				:local updateUrl "https://api.cloudflare.com/client/v4/zones/$CFzoneid/dns_records"
+				:set updateUrl "https://api.cloudflare.com/client/v4/zones/$CFzoneid/dns_records"
 				:if ($Debug) do={
 					:log info "[DEBUG] 未找到记录，正在创建新记录: $CFdomain"
 					:log info "[DEBUG] 提交数据: $postData"
