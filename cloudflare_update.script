@@ -28,7 +28,6 @@
 }
 
 ################# 默认配置（选填） #################
-
 # IPV6 后缀（可填写局域网内 LAN 固定后缀解析到内网某个设备），如果是本机，通常是 "::1"
 :local LANipv6end "::1"
 
@@ -47,6 +46,22 @@
 :global previousIPv6
 :local updateUrl
 :local httpMethod
+:local CFdomain
+:local recordType
+:local currentIP
+:local previousIP
+:local recordLookupUrl
+:local result
+:local response
+:local postData
+:local recordId
+:local recordIP
+:local WANip
+:local prefix
+:local authHeader
+:local doForce false
+:local needUpdate false
+:local secondsPassed
 :local currentTime [/system clock get time]
 :local currentDate [/system clock get date]
 :local timeStr [:totime ($currentDate . " " . $currentTime)]
@@ -62,11 +77,8 @@
 :foreach domainRecord in=$DomainsToUpdate do={
 
     # === 拆分域名列表 ===
-    :local CFdomain [:pick $domainRecord 0 [:find $domainRecord "|"]]
-    :local recordType [:pick $domainRecord ([:find $domainRecord "|"] + 1) [:len $domainRecord]]
-    :local currentIP ""
-    :local previousIP ""
-    :local WANip ""
+    :set CFdomain [:pick $domainRecord 0 [:find $domainRecord "|"]]
+    :set recordType [:pick $domainRecord ([:find $domainRecord "|"] + 1) [:len $domainRecord]]
 
 	# === 初始化 lastUpdateTime 变量 ===
     :if ([:len ($lastUpdateTime)] = 0) do={ :set $lastUpdateTime 0 }
@@ -79,7 +91,7 @@
         :if ($Debug) do={ :log info "[DEBUG] $CFdomain 的 IPv4 地址: $WANip" }
     } else={
         :if ([/ipv6 dhcp-client get [find interface=$CFiface6] status] = "bound") do={
-            :local prefix [/ipv6 dhcp-client get [find interface=$CFiface6 status=bound] prefix]
+            :set prefix [/ipv6 dhcp-client get [find interface=$CFiface6 status=bound] prefix]
             :set WANip ([:pick $prefix 0 [:find $prefix "::/"]] . $LANipv6end)
             :set previousIP $previousIPv6
             :if ($Debug) do={ :log info "[DEBUG] $CFdomain 的 IPv6 地址: $WANip" }
@@ -89,17 +101,15 @@
     }
 
     # === 判断是否需要更新 ===
-    :local doForce false
     :if (($totalSeconds - $lastUpdateTime) > $forceInterval) do={
         :set doForce true
     }
 
     :if ($Debug) do={
-        :local secondsPassed ($totalSeconds - $lastUpdateTime)
+        :set secondsPassed ($totalSeconds - $lastUpdateTime)
 		:log info "[DEBUG] 距离上次更新已经 $secondsPassed 秒"
     }
 
-    :local needUpdate false
     :if (($WANip != "") and ($WANip != $previousIP)) do={
 		:if ($Debug) do={ :log info "[DEBUG] 缓存的 IP : $previousIP" }
         :set needUpdate true
@@ -115,25 +125,22 @@
 		:if ($Debug) do={ :log info "[DEBUG] 处理 $CFdomain → $WANip" }
 
 		# === 获取已有域名解析记录 ===
-		:local recordLookupUrl "https://api.cloudflare.com/client/v4/zones/$CFzoneid/dns_records?type=$recordType&name=$CFdomain"
-		:local authHeader "Authorization: Bearer $CFtoken"
+		:set recordLookupUrl "https://api.cloudflare.com/client/v4/zones/$CFzoneid/dns_records?type=$recordType&name=$CFdomain"
+		:set authHeader "Authorization: Bearer $CFtoken"
 
 		:if ($Debug) do={
 			:log info "[DEBUG] 查询记录: $recordLookupUrl"
 		}
 
-		:local result [/tool fetch mode=https url=$recordLookupUrl \
+		:set result [/tool fetch mode=https url=$recordLookupUrl \
 			http-header-field=("$authHeader,Content-Type: application/json") \
 			as-value output=user]
 
-		:local response ($result->"data")
+		:set response ($result->"data")
 
 		:if ($Debug) do={
 			:log info "[DEBUG] API 响应内容: $response"
 		}
-
-		:local recordId ""
-		:local recordIP ""
 
 		:if ([:find $response "\"id\":\""] > 0) do={
 			:set recordId [:pick $response ([:find $response "\"id\":\""] + 6) [:find $response "\",\"" [:find $response "\"id\":\""]]]
@@ -158,7 +165,7 @@
 
 		# === 比较是否需要更新 ===
 		:if ($recordIP != $WANip) do={
-			:local postData "{\"type\":\"$recordType\",\"name\":\"$CFdomain\",\"content\":\"$WANip\",\"ttl\":$CFttl,\"proxied\":false}"
+			:set postData "{\"type\":\"$recordType\",\"name\":\"$CFdomain\",\"content\":\"$WANip\",\"ttl\":$CFttl,\"proxied\":false}"
 
 			# === 提交域名解析记录 ===
 			:if ($recordId != "") do={
@@ -177,10 +184,10 @@
 					:log info "[DEBUG] 提交数据: $postData"
 				}
 			}
-			:local result [/tool fetch http-method=$httpMethod mode=https url=$updateUrl \
+			:set result [/tool fetch http-method=$httpMethod mode=https url=$updateUrl \
 				http-header-field=("$authHeader,Content-Type: application/json") \
 				http-data=$postData as-value output=user]
-			:local response ($result->"data")
+			:set response ($result->"data")
 			# 检查是否成功
 			:if ([:find $response "\"success\":true"] > 0) do={
 				:log info "[DDNS] 已更新 $CFdomain：$recordIP → $WANip"
