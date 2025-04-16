@@ -4,6 +4,7 @@
 # 需要手动限速的客户端，请在 IPv4 防火墙列表中自行添加 speed_limit_ipv4 列表
 # IPv6 限速需要使用 MAC 地址，无法使用防火墙列表
 # 链路标记设置为标记所有连接，如需考虑性能，自行设置检测新连接Connection State=new，重启生效
+# 只基于千兆宽带定义了关键队列的保留宽带，如果你的网络环境非常恶劣，可以手动设置队列最大宽带和突发宽带等
 
 # 拨号接口名
 :local wanInterface "pppoe-out1"
@@ -183,7 +184,6 @@ add cake-ack-filter=filter cake-diffserv=diffserv4 cake-flowmode=dual-srchost \
     cake-overhead-scheme=ethernet cake-rtt=50ms kind=cake name=cake-tx
 
 ################# Qos 规则 #################
-# 只定义了关键队列的保留宽带，如果你的网络环境非常恶劣，可以手动设置队列最大宽带和突发宽带等
 /queue tree
 add bucket-size=0.05 comment="qosconf: download queue with CAKE" max-limit=\
     920M name=cake-download parent="$bridgeName" queue=cake-rx
@@ -192,11 +192,11 @@ add bucket-size=0.03 comment="qosconf: upload queue with CAKE" max-limit=62M \
 add burst-limit=20M burst-threshold=10M burst-time=10s limit-at=2M max-limit=\
     10M name=up-lv1 packet-mark=L1_Micro_up parent=cake-upload priority=1 \
     queue=cake-tx
-add burst-limit=25M burst-threshold=20M burst-time=10s limit-at=3M max-limit=\
-    15M name=up-lv2 packet-mark=L2_Mid_up parent=cake-upload priority=3 \
+add burst-limit=30M burst-threshold=25M burst-time=10s limit-at=3M max-limit=\
+    20M name=up-lv2 packet-mark=L2_Mid_up parent=cake-upload priority=3 \
     queue=cake-tx
 add burst-limit=50M burst-threshold=45M burst-time=10s limit-at=5M max-limit=\
-    20M name=up-lv3 packet-mark=L3_Web_Browse_up parent=cake-upload priority=\
+    30M name=up-lv3 packet-mark=L3_Web_Browse_up parent=cake-upload priority=\
     3 queue=cake-tx
 add name=up-lv5 packet-mark=Big_up parent=cake-upload priority=5 queue=\
     cake-tx
@@ -209,10 +209,10 @@ add bucket-size=0.03 burst-limit=50M burst-threshold=28M burst-time=10s \
 add bucket-size=0.05 burst-limit=50M burst-threshold=45M burst-time=10s \
     limit-at=5M max-limit=20M name=down-lv1 packet-mark=L1_Micro_down parent=\
     cake-download priority=1 queue=cake-rx
-add bucket-size=0.05 burst-limit=200M burst-threshold=150M burst-time=10s \
-    limit-at=10M max-limit=50M name=down-lv2 packet-mark=L2_Mid_down parent=\
+add bucket-size=0.05 burst-limit=500M burst-threshold=450M burst-time=10s \
+    limit-at=10M max-limit=200M name=down-lv2 packet-mark=L2_Mid_down parent=\
     cake-download priority=2 queue=cake-rx
-add bucket-size=0.05 burst-limit=800M burst-threshold=400M burst-time=10s \
+add bucket-size=0.05 burst-limit=800M burst-threshold=700M burst-time=10s \
     limit-at=20M max-limit=500M name=down-lv3 packet-mark=L3_Web_Browse_down \
     parent=cake-download priority=3 queue=cake-rx
 add bucket-size=0.05 name=down-lv5 packet-mark=Big_down parent=cake-download \
