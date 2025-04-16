@@ -1,0 +1,225 @@
+################# 用户配置（必填） #################
+# ROS 无法删除变量，只能使用 local global 新建或 set 修改，请在运行前确认变量值
+# 请导入脚本中使用，否则自行使用全局变量 global 或 set
+# 需要手动限速的客户端，请在 IPv4 防火墙列表中自行添加 speed_limit_ipv4 列表
+# IPv6 限速需要使用 MAC 地址，无法使用防火墙列表
+
+# 拨号接口名
+:local wanInterface "pppoe-out1"
+
+# 局域网接口名
+:local bridgeName "bridge1"
+
+# 队列内存限制（字节）
+# 通常来说，64MB 到 128MB 已经足够，这里设置为 64MB
+:local cakeMemLimit "67108864"
+
+################# IPv4 流量标记 #################
+/ip firewall mangle
+add action=mark-connection chain=forward comment="Download via $wanInterface" \
+    in-interface="$wanInterface" new-connection-mark=Conn_Download
+add action=mark-connection chain=forward comment="Upload via $wanInterface" \
+    new-connection-mark=Conn_Upload out-interface="$wanInterface"
+add action=mark-packet chain=forward comment=\
+    "[L1] Micro packets (\A1\DC128B, Download)" connection-mark=Conn_Download \
+    new-packet-mark=L1_Micro_down packet-size=0-128 passthrough=no
+add action=mark-packet chain=forward comment=\
+    "[L1] Micro packets (\A1\DC128B, Upload)" connection-mark=Conn_Upload \
+    new-packet-mark=L1_Micro_up packet-size=0-128 passthrough=no
+add action=mark-packet chain=forward comment="[L1] ICMP packets (Download)" \
+    connection-mark=Conn_Download new-packet-mark=L1_Micro_down passthrough=\
+    no protocol=icmp
+add action=mark-packet chain=forward comment="[L1] ICMP packets (Upload)" \
+    connection-mark=Conn_Upload new-packet-mark=L1_Micro_up passthrough=no \
+    protocol=icmp
+add action=mark-packet chain=input comment=\
+    "[L1] Router local traffic (\A1\DC600B, Download)" dst-address-type=local \
+    new-packet-mark=L1_Micro_down packet-size=0-600 passthrough=no
+add action=mark-packet chain=output comment=\
+    "[L1] Router local traffic (\A1\DC600B, Upload)" new-packet-mark=\
+    L1_Micro_up packet-size=0-600 passthrough=no src-address-type=local
+add action=mark-packet chain=forward comment=\
+    "[L1] TLS ClientHello (Upload, 200-600B)" connection-mark=Conn_Upload \
+    new-packet-mark=L1_Micro_up packet-size=200-600 passthrough=no protocol=\
+    tcp tcp-flags=psh,ack
+add action=mark-packet chain=forward comment=\
+    "[L1] TLS ServerHello (Download, 200-700B)" connection-mark=Conn_Download \
+    new-packet-mark=L1_Micro_down packet-size=200-700 passthrough=no \
+    protocol=tcp tcp-flags=psh,ack
+add action=mark-packet chain=forward comment=\
+    "[L2] Mid packets (\A1\DC512B, Download)" connection-mark=Conn_Download \
+    new-packet-mark=L2_Mid_down packet-size=0-512 passthrough=no
+add action=mark-packet chain=forward comment=\
+    "[L2] Mid packets (\A1\DC512B, Upload)" connection-mark=Conn_Upload \
+    new-packet-mark=L2_Mid_up packet-size=0-512 passthrough=no
+add action=mark-packet chain=forward comment=\
+    "[L2] UDP packets (\A1\DC1200B, Download)" connection-mark=Conn_Download \
+    new-packet-mark=L2_Mid_down packet-size=0-1200 passthrough=no protocol=\
+    udp
+add action=mark-packet chain=forward comment=\
+    "[L2] UDP packets (\A1\DC1200B, Upload)" connection-mark=Conn_Upload \
+    new-packet-mark=L2_Mid_up packet-size=0-1200 passthrough=no protocol=udp
+add action=mark-packet chain=forward comment=\
+    "[L3] Web ports (\A1\DC1200B, TCP 80/443, Download)" connection-mark=\
+    Conn_Download new-packet-mark=L3_Web_Browse_down packet-size=0-1200 \
+    passthrough=no protocol=tcp src-port=80,443
+add action=mark-packet chain=forward comment=\
+    "[L3] Web ports (\A1\DC1200B, TCP 80/443, Upload)" connection-mark=\
+    Conn_Upload dst-port=80,443 new-packet-mark=L3_Web_Browse_up packet-size=\
+    0-1200 protocol=tcp
+add action=mark-packet chain=forward comment="[L3] QUIC (UDP 443, Download)" \
+    connection-mark=Conn_Download new-packet-mark=L3_Web_Browse_down \
+    passthrough=no protocol=udp src-port=443
+add action=mark-packet chain=forward comment="[L3] QUIC (UDP 443, Upload)" \
+    connection-mark=Conn_Upload dst-port=443 new-packet-mark=L3_Web_Browse_up \
+    passthrough=no protocol=udp
+add action=mark-packet chain=forward comment=\
+    "[Max] Big packets (\A1\DD1200B, Download)" connection-mark=Conn_Download \
+    new-packet-mark=Big_down packet-size=1200-1500
+add action=mark-packet chain=forward comment=\
+    "[Max] Big packets (\A1\DD1200B, Upload)" connection-mark=Conn_Upload \
+    new-packet-mark=Big_up packet-size=1200-1500
+add action=mark-packet chain=forward comment=\
+    "[Misc] TCP multi-conn (\A1\DD4, Download)" connection-limit=4,0 \
+    connection-mark=Conn_Download new-packet-mark=Multiple_down protocol=tcp
+add action=mark-packet chain=forward comment=\
+    "[Misc] TCP multi-conn (\A1\DD4, Upload)" connection-limit=4,0 \
+    connection-mark=Conn_Upload new-packet-mark=Multiple_up protocol=tcp
+add action=mark-packet chain=forward comment=\
+    "[Misc] P2P limited user (Upload)" connection-mark=Conn_Upload \
+    new-packet-mark=P2p_up passthrough=no src-address-list=speed_limit_ipv4
+add action=mark-packet chain=forward comment="[Misc] P2P port (Upload)" \
+    connection-mark=Conn_Upload new-packet-mark=P2p_up passthrough=no \
+    protocol=tcp src-port=63219
+
+################# IPv6 流量标记 #################
+/ipv6 firewall mangle
+add action=mark-connection chain=forward comment="Mark download connection" \
+    in-interface="$wanInterface" new-connection-mark=\
+    Conn_Download place-before=0
+add action=mark-connection chain=forward comment="Mark upload connection" \
+    new-connection-mark=Conn_Upload out-interface=\
+    "$wanInterface" place-before=0
+add action=mark-packet chain=forward comment=\
+    "[L1] Micro packets \A1\DC148B (Download)" new-packet-mark=L1_Micro_down \
+    packet-size=0-148 passthrough=no
+add action=mark-packet chain=forward comment=\
+    "[L1] Micro packets \A1\DC148B (Upload)" connection-mark=Conn_Upload \
+    new-packet-mark=L1_Micro_up packet-size=0-148 passthrough=no
+add action=mark-packet chain=input comment=\
+    "[L1] Router local traffic (\A1\DC620B, Download)" dst-address-type=local \
+    new-packet-mark=L1_Micro_down packet-size=0-620 passthrough=no
+add action=mark-packet chain=output comment=\
+    "[L1] Router local traffic (\A1\DC620B, Upload)" new-packet-mark=\
+    L1_Micro_up packet-size=0-620 passthrough=no src-address-type=local
+add action=mark-packet chain=forward comment="[L1] ICMP packet (Download)" \
+    connection-mark=Conn_Download new-packet-mark=L1_Micro_down passthrough=\
+    no protocol=icmpv6
+add action=mark-packet chain=forward comment="[L1] ICMP packet (Upload)" \
+    connection-mark=Conn_Upload new-packet-mark=L1_Micro_up passthrough=no \
+    protocol=icmpv6
+add action=mark-packet chain=forward comment=\
+    "[L1] TLS ClientHello (Upload, 220-800B)" connection-mark=Conn_Upload \
+    new-packet-mark=L1_Micro_up packet-size=220-800 passthrough=no protocol=\
+    tcp tcp-flags=psh,ack
+add action=mark-packet chain=forward comment=\
+    "[L1] TLS ServerHello (Download, 220-1000B)" connection-mark=\
+    Conn_Download new-packet-mark=L1_Micro_down packet-size=220-1000 \
+    passthrough=no protocol=tcp tcp-flags=psh,ack
+add action=mark-packet chain=forward comment=\
+    "[L2] Mid packets (\A1\DC512B, Download)" connection-mark=Conn_Download \
+    new-packet-mark=L2_Mid_down packet-size=0-512 passthrough=no
+add action=mark-packet chain=forward comment=\
+    "[L2] Mid packets (\A1\DC512B, Upload)" connection-mark=Conn_Upload \
+    new-packet-mark=L2_Mid_up packet-size=0-512 passthrough=no
+add action=mark-packet chain=forward comment=\
+    "[L2] UDP packets (\A1\DC1000B, Download)" connection-mark=Conn_Download \
+    new-packet-mark=L2_Mid_down packet-size=0-1000 passthrough=no protocol=\
+    udp
+add action=mark-packet chain=forward comment=\
+    "[L2] UDP packets (\A1\DC1000B, Upload)" connection-mark=Conn_Upload \
+    new-packet-mark=L2_Mid_up packet-size=0-1000 passthrough=no protocol=udp
+add action=mark-packet chain=forward comment=\
+    "[L3] Web ports (\A1\DC1000B, TCP 80/443, Download)" connection-mark=\
+    Conn_Download new-packet-mark=L3_Web_Browse_down packet-size=0-1000 \
+    passthrough=no protocol=tcp src-port=80,443
+add action=mark-packet chain=forward comment=\
+    "[L3] Web ports (\A1\DC1000B, TCP 80/443, Upload)" connection-mark=\
+    Conn_Upload dst-port=80,443 new-packet-mark=L3_Web_Browse_up packet-size=\
+    0-1000 passthrough=no protocol=tcp
+add action=mark-packet chain=forward comment="[L3] QUIC (UDP 443, Download)" \
+    connection-mark=Conn_Download new-packet-mark=L3_Web_Browse_down \
+    passthrough=no protocol=udp src-port=443
+add action=mark-packet chain=forward comment="[L3] QUIC (UDP 443, Upload)" \
+    connection-mark=Conn_Upload dst-port=443 new-packet-mark=L3_Web_Browse_up \
+    passthrough=no protocol=udp
+add action=mark-packet chain=forward comment=\
+    "[Max] Big packets (\A1\DD1000B, Download)" connection-mark=Conn_Download \
+    new-packet-mark=Big_down packet-size=1000-1500
+add action=mark-packet chain=forward comment=\
+    "[Max] Big packets (\A1\DD1000B, Upload)" connection-mark=Conn_Upload \
+    new-packet-mark=Big_up packet-size=1000-1500
+add action=mark-packet chain=forward comment=\
+    "[Misc] TCP multi-conn (\A1\DD4, Download)" connection-limit=4,0 \
+    connection-mark=Conn_Download new-packet-mark=Multiple_down protocol=tcp
+add action=mark-packet chain=forward comment=\
+    "[Misc] TCP multi-conn (\A1\DD4, Upload)" connection-limit=4,0 \
+    connection-mark=Conn_Upload new-packet-mark=Multiple_up protocol=tcp
+add action=mark-packet chain=forward comment=\
+    "[Misc] P2P limited user (Upload)" connection-mark=Conn_Upload \
+    new-packet-mark=P2p_up passthrough=no src-mac-address=C8:58:C0:29:79:DA
+add action=mark-packet chain=forward comment="[Misc] P2P port (Upload)" \
+    connection-mark=Conn_Upload new-packet-mark=P2p_up passthrough=no \
+    protocol=tcp src-port=63219
+
+################# 队列调度器 #################
+/queue type
+add cake-ack-filter=filter cake-diffserv=diffserv4 cake-flowmode=dual-dsthost \
+    cake-memlimit="$cakeMemLimit" cake-mpu=84 cake-nat=yes cake-overhead=38 \
+    cake-overhead-scheme=ethernet cake-rtt=50ms kind=cake name=cake-rx
+add cake-ack-filter=filter cake-diffserv=diffserv4 cake-flowmode=dual-srchost \
+    cake-memlimit="$cakeMemLimit" cake-mpu=84 cake-nat=yes cake-overhead=38 \
+    cake-overhead-scheme=ethernet cake-rtt=50ms kind=cake name=cake-tx
+
+################# Qos 规则 #################
+# 只定义了关键队列的保留宽带，如果你的网络环境非常恶劣，可以手动设置队列最大宽带和突发宽带等
+/queue tree
+add bucket-size=0.05 comment="qosconf: download queue with CAKE" max-limit=\
+    920M name=cake-download parent="$bridgeName" queue=cake-rx
+add bucket-size=0.03 comment="qosconf: upload queue with CAKE" max-limit=62M \
+    name=cake-upload parent="$wanInterface" queue=cake-tx
+add burst-limit=20M burst-threshold=10M burst-time=10s limit-at=2M max-limit=\
+    10M name=up-lv1 packet-mark=L1_Micro_up parent=cake-upload priority=1 \
+    queue=cake-tx
+add burst-limit=25M burst-threshold=20M burst-time=10s limit-at=3M max-limit=\
+    15M name=up-lv2 packet-mark=L2_Mid_up parent=cake-upload priority=3 \
+    queue=cake-tx
+add burst-limit=50M burst-threshold=45M burst-time=10s limit-at=5M max-limit=\
+    20M name=up-lv3 packet-mark=L3_Web_Browse_up parent=cake-upload priority=\
+    3 queue=cake-tx
+add name=up-lv5 packet-mark=Big_up parent=cake-upload priority=5 queue=\
+    cake-tx
+add name=up-lv6 parent=cake-upload priority=7 queue=cake-tx
+add name=Multiple_up packet-mark=Multiple_up parent=up-lv6 priority=6 queue=\
+    cake-tx
+add bucket-size=0.03 burst-limit=50M burst-threshold=28M burst-time=10s \
+    max-limit=30M name=P2p_up packet-mark=P2p_up parent=up-lv6 priority=6 \
+    queue=cake-tx
+add bucket-size=0.05 burst-limit=50M burst-threshold=45M burst-time=10s \
+    limit-at=5M max-limit=20M name=down-lv1 packet-mark=L1_Micro_down parent=\
+    cake-download priority=1 queue=cake-rx
+add bucket-size=0.05 burst-limit=200M burst-threshold=150M burst-time=10s \
+    limit-at=10M max-limit=50M name=down-lv2 packet-mark=L2_Mid_down parent=\
+    cake-download priority=2 queue=cake-rx
+add bucket-size=0.05 burst-limit=800M burst-threshold=400M burst-time=10s \
+    limit-at=20M max-limit=500M name=down-lv3 packet-mark=L3_Web_Browse_down \
+    parent=cake-download priority=3 queue=cake-rx
+add bucket-size=0.05 name=down-lv5 packet-mark=Big_down parent=cake-download \
+    priority=5 queue=cake-rx
+add bucket-size=0.05 name=down-lv6 packet-mark=Multiple_down parent=\
+    cake-download priority=6 queue=cake-rx
+add bucket-size=0.05 name=down-lv4 packet-mark=no-mark parent=cake-download \
+    priority=4 queue=cake-rx
+add name=up-lv4 packet-mark=no-mark parent=cake-upload priority=4 queue=\
+    cake-tx
+    
