@@ -3,6 +3,7 @@
 # 请导入脚本中使用，否则自行使用全局变量 global 或 set
 # 需要手动限速的客户端，请在 IPv4 防火墙列表中自行添加 speed_limit_ipv4 列表
 # IPv6 限速需要使用 MAC 地址，无法使用防火墙列表
+# 链路标记设置为标记所有连接，如需考虑性能，自行设置检测新连接Connection State=new，重启生效
 
 # 拨号接口名
 :local wanInterface "pppoe-out1"
