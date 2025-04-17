@@ -62,16 +62,32 @@
 :local doForce false
 :local needUpdate false
 :local secondsPassed
-:local currentTime [/system clock get time]
-:local currentDate [/system clock get date]
-:local timeStr [:totime ($currentDate . " " . $currentTime)]
 :local allRecordsUpdated true
-:local weeks [:pick $timeStr 0 [:find $timeStr "w"]]
-:local days [:pick $timeStr ([:find $timeStr "w"] + 1) [:find $timeStr "d"]]
-:local hours [:pick $timeStr ([:find $timeStr "d"] + 1) [:find $timeStr ":"]]
-:local minutes [:pick $timeStr ([:find $timeStr ":" ] + 1) [:find $timeStr ":" ([:find $timeStr ":"] + 1)]]
-:local seconds [:pick $timeStr ([:find $timeStr ":" ([:find $timeStr ":"] + 1)] + 1) [:len $timeStr]]
-:local totalSeconds ((($weeks * 7 * 24 * 60 * 60) + ($days * 24 * 60 * 60) + ($hours * 60 * 60) + ($minutes * 60) + $seconds))
+:local currentDate [/system clock get date]
+:local currentTime [/system clock get time]
+:local yearStart [:find $currentDate "-"]
+:local monthStart [:find $currentDate "-" ($yearStart + 1)]
+:local currentYear [:pick $currentDate 0 $yearStart]
+:local currentMonth [:pick $currentDate ($yearStart + 1) $monthStart]
+:local currentDay [:pick $currentDate ($monthStart + 1) [:len $currentDate]]
+:local hourStart [:find $currentTime ":"]
+:local minuteStart [:find $currentTime ":" ($hourStart + 1)]
+:local currentHour [:pick $currentTime 0 $hourStart]
+:local currentMinute [:pick $currentTime ($hourStart + 1) $minuteStart]
+:local currentSecond [:pick $currentTime ($minuteStart + 1) [:len $currentTime]]
+
+:if ($Debug) do={
+	:log info "[DEBUG] currentDate: $currentDate"
+	:log info "[DEBUG] currentTime: $currentTime"
+	:log info "[DEBUG] yearStart: $yearStart"
+	:log info "[DEBUG] monthStart: $monthStart"
+	:log info "[DEBUG] currentDay: $currentDay"
+	:log info "[DEBUG] minuteStart: $minuteStart"
+	:log info "[DEBUG] currentHour: $currentHour"
+	:log info "[DEBUG] currentMinute: $currentMinute"
+	:log info "[DEBUG] currentMinute: $currentMinute"
+    }
+:local totalSeconds ((($currentYear - 1970) * 365 * 24 * 60 * 60) + ($currentMonth * 30 * 24 * 60 * 60) + ($currentDay * 24 * 60 * 60) + ($currentHour * 60 * 60) + ($currentMinute * 60) + $currentSecond)
 
 ################# 主程序 #################
 :foreach domainRecord in=$DomainsToUpdate do={
