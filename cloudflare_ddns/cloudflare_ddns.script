@@ -104,15 +104,15 @@
         :set currentIP [/ip address get [/ip address find interface=$CFiface] address]
         :set WANip [:pick $currentIP 0 [:find $currentIP "/"]]
         :set previousIP $previousIPv4
-        :if ($Debug) do={ :log info "[DEBUG] $CFdomain 的 IPv4 地址: $WANip" }
+        :if ($Debug) do={ :log info "[DEBUG] WAN IPv4 地址: $WANip" }
     } else={
         :if ([/ipv6 dhcp-client get [find interface=$CFiface6] status] = "bound") do={
             :set prefix [/ipv6 dhcp-client get [find interface=$CFiface6 status=bound] prefix]
             :set WANip ([:pick $prefix 0 [:find $prefix "::/"]] . $LANipv6end)
             :set previousIP $previousIPv6
-            :if ($Debug) do={ :log info "[DEBUG] $CFdomain 的 IPv6 地址: $WANip" }
+            :if ($Debug) do={ :log info "[DEBUG] WAN IPv6 地址: $WANip" }
         } else={
-            :log warning "无法获取 $CFdomain 的 IPv6 地址，请检查接口设置。"
+            :log warning "无法获取 WAN IPv6 地址，请检查接口设置。"
         }
     }
 
