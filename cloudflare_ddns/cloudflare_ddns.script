@@ -21,15 +21,18 @@
 
 # 域名列表：格式为 "domain|A" 或 "domain|AAAA"
 :local DomainsToUpdate {
-    "v4.domain.com|A";
-    "v6.domain.com|AAAA";
-    "ds.domain.com|A";
-    "ds.domain.com|AAAA";
+	"v4.domain.com|A";
+	"v6.domain.com|AAAA";
+	"ds.domain.com|A";
+	"ds.domain.com|AAAA";
 }
 
 ################# 默认配置（选填） #################
-# IPV6 后缀（可填写局域网内 LAN 固定后缀解析到内网某个设备），如果是本机，通常是 "::1"
+# LANipv6end: IPV6 后缀（可填写局域网内 LAN 固定后缀解析到内网某个设备），如果是本机，通常是 "::1"
+# MacTarget: 使用 MAC 地址匹配设备 IPv6 地址，这基于 IPv6 邻居查找，适用于设备后缀不固定的情况（如果使用这个选项，请设置定时任务，因为 /ipv6 neighbor 获得的地址不会随路由器重新拨号实时变化）
+# 以下选项二选一，默认使用 LANipv6end
 :local LANipv6end "::1"
+:local MacTarget ""
 
 # TTL 值，设置为 1 时为自动
 :local CFttl 1
@@ -57,7 +60,10 @@
 :local recordId
 :local recordIP
 :local WANip
-:local prefix
+:local Dhcpv6Prefix
+:local NeighborAddr
+:local NeighborPrefixCheck
+:local doFound "false"
 :local authHeader
 :local doForce false
 :local needUpdate false
@@ -75,66 +81,70 @@
 :local currentHour [:pick $currentTime 0 $hourStart]
 :local currentMinute [:pick $currentTime ($hourStart + 1) $minuteStart]
 :local currentSecond [:pick $currentTime ($minuteStart + 1) [:len $currentTime]]
-
-:if ($Debug) do={
-	:log info "[DEBUG] currentDate: $currentDate"
-	:log info "[DEBUG] currentTime: $currentTime"
-	:log info "[DEBUG] yearStart: $yearStart"
-	:log info "[DEBUG] monthStart: $monthStart"
-	:log info "[DEBUG] currentDay: $currentDay"
-	:log info "[DEBUG] minuteStart: $minuteStart"
-	:log info "[DEBUG] currentHour: $currentHour"
-	:log info "[DEBUG] currentMinute: $currentMinute"
-	:log info "[DEBUG] currentMinute: $currentMinute"
-    }
 :local totalSeconds ((($currentYear - 1970) * 365 * 24 * 60 * 60) + ($currentMonth * 30 * 24 * 60 * 60) + ($currentDay * 24 * 60 * 60) + ($currentHour * 60 * 60) + ($currentMinute * 60) + $currentSecond)
 
 ################# 主程序 #################
 :foreach domainRecord in=$DomainsToUpdate do={
 
-    # === 拆分域名列表 ===
-    :set CFdomain [:pick $domainRecord 0 [:find $domainRecord "|"]]
-    :set recordType [:pick $domainRecord ([:find $domainRecord "|"] + 1) [:len $domainRecord]]
+	# === 拆分域名列表 ===
+	:set CFdomain [:pick $domainRecord 0 [:find $domainRecord "|"]]
+	:set recordType [:pick $domainRecord ([:find $domainRecord "|"] + 1) [:len $domainRecord]]
 
 	# === 初始化 lastUpdateTime 变量 ===
-    :if ([:len ($lastUpdateTime)] = 0) do={ :set $lastUpdateTime 0 }
+	:if ([:len ($lastUpdateTime)] = 0) do={ :set $lastUpdateTime 0 }
 
 	# === 获取当前 WAN IP ===
-    :if ($recordType = "A") do={
-        :set currentIP [/ip address get [/ip address find interface=$CFiface] address]
-        :set WANip [:pick $currentIP 0 [:find $currentIP "/"]]
-        :set previousIP $previousIPv4
-        :if ($Debug) do={ :log info "[DEBUG] WAN IPv4 地址: $WANip" }
-    } else={
-        :if ([/ipv6 dhcp-client get [find interface=$CFiface6] status] = "bound") do={
-            :set prefix [/ipv6 dhcp-client get [find interface=$CFiface6 status=bound] prefix]
-            :set WANip ([:pick $prefix 0 [:find $prefix "::/"]] . $LANipv6end)
-            :set previousIP $previousIPv6
-            :if ($Debug) do={ :log info "[DEBUG] WAN IPv6 地址: $WANip" }
-        } else={
-            :log warning "无法获取 WAN IPv6 地址，请检查接口设置。"
-        }
-    }
+	:if ($recordType = "A") do={
+		:set currentIP [/ip address get [/ip address find interface=$CFiface] address]
+		:set WANip [:pick $currentIP 0 [:find $currentIP "/"]]
+		:set previousIP $previousIPv4
+		:if ($Debug) do={ :log info "[DEBUG] WAN IPv4 地址: $WANip" }
+	} else={
+		:if ([/ipv6 dhcp-client get [find interface=$CFiface6] status] = "bound") do={
+			:local Dhcpv6Prefix [/ipv6 dhcp-client get [find interface=$CFiface6 status=bound] prefix]
+			:if ([:len $LANipv6end] > 0) do={
+				:set WANip ([:pick $Dhcpv6Prefix 0 [:find $Dhcpv6Prefix "::/"]] . $LANipv6end)
+			} else={
+				:if ([:len $MacTarget] > 0) do={
+					:foreach n in=[/ipv6 neighbor find where mac-address=$MacTarget] do={
+						:if ($doFound = "false") do={
+							:set NeighborAddr [/ipv6 neighbor get $n address]
+							:set NeighborPrefixCheck [:pick $NeighborAddr 0 2]
+							# 过滤 fe80 (link-local), fc00/fd00 (ULA)
+							:if ($NeighborPrefixCheck != "fe" && $NeighborPrefixCheck != "fc" && $NeighborPrefixCheck != "fd") do={
+								:set WANip $NeighborAddr
+								:set doFound "true"
+							}
+						}
+					}
+				}
+			}
+			:set previousIP $previousIPv6
+			:if ($Debug) do={ :log info "[DEBUG] WAN IPv6 地址: $WANip" }
+		} else={
+			:log warning "无法获取 WAN IPv6 地址，请检查接口设置。"
+		}
+	}
 
-    # === 判断是否需要更新 ===
-    :if (($totalSeconds - $lastUpdateTime) > $forceInterval) do={
-        :set doForce true
-    }
+	# === 判断是否需要更新 ===
+	:if (($totalSeconds - $lastUpdateTime) > $forceInterval) do={
+		:set doForce true
+	}
 
-    :if ($Debug) do={
-        :set secondsPassed ($totalSeconds - $lastUpdateTime)
+	:if ($Debug) do={
+		:set secondsPassed ($totalSeconds - $lastUpdateTime)
 		:log info "[DEBUG] 距离上次更新已经 $secondsPassed 秒"
-    }
+	}
 
-    :if (($WANip != "") and ($WANip != $previousIP)) do={
+	:if (($WANip != "") and ($WANip != $previousIP)) do={
 		:if ($Debug) do={ :log info "[DEBUG] 缓存的 IP : $previousIP" }
-        :set needUpdate true
-    } else={
-        :if (($WANip != "") and ($doForce)) do={
+		:set needUpdate true
+	} else={
+		:if (($WANip != "") and ($doForce)) do={
 			:if ($Debug) do={ :log info "[DEBUG] 超过强制时间间隔，强制检查更新" }
-            :set needUpdate true
-        }
-    }
+			:set needUpdate true
+		}
+	}
 
 	# === 域名解析 ===
 	:if ($needUpdate and ($WANip != "")) do={
@@ -219,23 +229,23 @@
 				:set allRecordsUpdated false
 			}
 		} else={
-            :log info "[DDNS] $CFdomain 的 IP 与记录一致，无需更新。"
+			:log info "[DDNS] $CFdomain 的 IP 与记录一致，无需更新。"
 		}
 
 	} else={
-        :if ($WANip = "") do={
-            :log warning "[DDNS] $CFdomain 无法获取 IP，跳过。"
-            :set allRecordsUpdated false
-        } else={
-            :log info "[DDNS] $CFdomain 与缓存的 IP 一致，跳过更新。"
-            :set allRecordsUpdated false
-        }
-    }
+		:if ($WANip = "") do={
+			:log warning "[DDNS] $CFdomain 无法获取 IP，跳过。"
+			:set allRecordsUpdated false
+		} else={
+			:log info "[DDNS] $CFdomain 与缓存的 IP 一致，跳过更新。"
+			:set allRecordsUpdated false
+		}
+	}
 }
 
 :if ($allRecordsUpdated) do={
-    :set lastUpdateTime $totalSeconds
-    :if ($Debug) do={ :log info "[DEBUG] 全部记录成功，更新时间戳为 $lastUpdateTime" }
+	:set lastUpdateTime $totalSeconds
+	:if ($Debug) do={ :log info "[DEBUG] 全部记录成功，更新时间戳为 $lastUpdateTime" }
 } else={
-    :log warning "[DDNS] 部分记录更新失败或已跳过，将在下次运行时重试。"
+	:log warning "[DDNS] 部分记录更新失败或已跳过，将在下次运行时重试。"
 }
