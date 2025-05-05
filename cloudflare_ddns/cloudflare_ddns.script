@@ -103,7 +103,8 @@
 	} else={
 		:if ([/ipv6 dhcp-client get [find interface=$CFiface6] status] = "bound") do={
 			:set Dhcpv6Prefix [/ipv6 dhcp-client get [find interface=$CFiface6 status=bound] prefix]
-			:set Dhcpv6prefixBase [:pick $prefix 0 [:find $prefix "::/"]]
+			:set Dhcpv6prefixBase [:pick $Dhcpv6Prefix 0 [:find $Dhcpv6Prefix "::/"]]
+			:if ($Debug) do={ :log info "[DEBUG] IPv6 前缀: $Dhcpv6prefixBase" }
 			:if ([:len $LANipv6end] > 0) do={
 				:set WANip ([:pick $Dhcpv6Prefix 0 [:find $Dhcpv6Prefix "::/"]] . $LANipv6end)
 				:set WANip ($Dhcpv6prefixBase . $LANipv6end)
@@ -111,7 +112,7 @@
 				:if ([:len $MacTarget] > 0) do={
 					:foreach n in=[/ipv6 neighbor find where mac-address=$MacTarget] do={
 						:set NeighborAddr [/ipv6 neighbor get $n address]
-						:set NeighborAddrPrefix [:pick $addr 0 ([:len $Dhcpv6prefixBase])]
+						:set NeighborAddrPrefix [:pick $NeighborAddr 0 ([:len $Dhcpv6prefixBase])]
 						:set NeighborPrefixCheck [:pick $NeighborAddr 0 2]
 						# 比较 neighbor 地址的前缀和 DHCPv6 拿到的前缀
 						:if ($NeighborAddrPrefix = $Dhcpv6prefixBase) do={
