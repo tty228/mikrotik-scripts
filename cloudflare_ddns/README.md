@@ -14,7 +14,7 @@ This script is designed for **MikroTik RouterOS v7.x**, allowing automatic updat
 - 🔐 **Uses Cloudflare API Token for simpler and safer setup**  
 - ➕ **Auto-creates DNS records – no manual intervention**  
 - 🧠 **Caching mechanism to avoid frequent API requests, with optional forced update interval**  
-- 📤 **Supports submitting IPv6 addresses from the local device or internal network** (e.g. `::1`, manual suffix appending)  
+- 📤 **Supports submitting IPv6 addresses from the local device or internal network** (e.g. `::1`, manual suffix appending、MAC Address)  
 - 📡 **Uses Cloudflare DNS API to read domain records directly, instead of relying on DNS resolution**  
 
 ---
