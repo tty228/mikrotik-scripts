@@ -57,9 +57,9 @@
 :local result
 :local response
 :local postData
-:local recordId
-:local recordIP
-:local WANip
+:local recordId ""
+:local recordIP ""
+:local WANip ""
 :local Dhcpv6Prefix
 :local Dhcpv6prefixBase
 :local NeighborAddr
