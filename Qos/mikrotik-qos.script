@@ -62,11 +62,12 @@ add action=mark-packet chain=forward comment=\
     new-packet-mark=L2_Mid_up packet-size=0-512 passthrough=no
 add action=mark-packet chain=forward comment=\
     "[L2] UDP packets (\A1\DC1200B, Download)" connection-mark=Conn_Download \
-    new-packet-mark=L2_Mid_down packet-size=0-1200 passthrough=no protocol=\
-    udp
+    disabled=yes new-packet-mark=L2_Mid_down packet-size=0-1200 passthrough=\
+    no protocol=udp
 add action=mark-packet chain=forward comment=\
     "[L2] UDP packets (\A1\DC1200B, Upload)" connection-mark=Conn_Upload \
-    new-packet-mark=L2_Mid_up packet-size=0-1200 passthrough=no protocol=udp
+    disabled=yes new-packet-mark=L2_Mid_up packet-size=0-1200 passthrough=no \
+    protocol=udp
 add action=mark-packet chain=forward comment=\
     "[L3] Web ports (\A1\DC1200B, TCP 80/443, Download)" connection-mark=\
     Conn_Download new-packet-mark=L3_Web_Browse_down packet-size=0-1200 \
@@ -142,11 +143,12 @@ add action=mark-packet chain=forward comment=\
     new-packet-mark=L2_Mid_up packet-size=0-512 passthrough=no
 add action=mark-packet chain=forward comment=\
     "[L2] UDP packets (\A1\DC1000B, Download)" connection-mark=Conn_Download \
-    new-packet-mark=L2_Mid_down packet-size=0-1000 passthrough=no protocol=\
-    udp
+    disabled=yes new-packet-mark=L2_Mid_down packet-size=0-1000 passthrough=\
+    no protocol=udp
 add action=mark-packet chain=forward comment=\
     "[L2] UDP packets (\A1\DC1000B, Upload)" connection-mark=Conn_Upload \
-    new-packet-mark=L2_Mid_up packet-size=0-1000 passthrough=no protocol=udp
+    disabled=yes new-packet-mark=L2_Mid_up packet-size=0-1000 passthrough=no \
+    protocol=udp
 add action=mark-packet chain=forward comment=\
     "[L3] Web ports (\A1\DC1000B, TCP 80/443, Download)" connection-mark=\
     Conn_Download new-packet-mark=L3_Web_Browse_down packet-size=0-1000 \
