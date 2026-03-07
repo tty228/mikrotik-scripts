@@ -278,7 +278,7 @@ add burst-limit=40M burst-threshold=35M burst-time=10s limit-at=2M max-limit=\
     3 queue=default
 add name=up-lv4 packet-mark=no-mark parent=cake-upload priority=4 queue=\
     default
-add burst-limit=50M burst-threshold=45M burst-time=30s max-limit=30M name=\
+add burst-limit=40M burst-threshold=25M burst-time=30s max-limit=30M name=\
     up-shared parent=cake-upload priority=5 queue=default
 add name=up-lv5 packet-mark=Multiple_up parent=up-shared priority=1 queue=\
     default
@@ -293,12 +293,12 @@ add burst-limit=300M burst-threshold=280M burst-time=10s limit-at=5M \
 add burst-limit=300M burst-threshold=280M burst-time=10s limit-at=5M \
     max-limit=200M name=down-lv2 packet-mark=L2_Mid_down parent=cake-download \
     priority=2 queue=default
-add burst-limit=800M burst-threshold=750M burst-time=10s limit-at=20M \
+add burst-limit=800M burst-threshold=420M burst-time=10s limit-at=20M \
     max-limit=500M name=down-lv3 packet-mark=L3_Web_Browse_down parent=\
     cake-download priority=3 queue=default
 add name=down-lv4 packet-mark=no-mark parent=cake-download priority=4 queue=\
     default
-add burst-limit=850M burst-threshold=820M burst-time=30s max-limit=800M name=\
+add burst-limit=850M burst-threshold=720M burst-time=30s max-limit=800M name=\
     down-shared parent=cake-download priority=5 queue=default
 add name=down-lv5 packet-mark=Multiple_down parent=down-shared priority=1 \
     queue=default
