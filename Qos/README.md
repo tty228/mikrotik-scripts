@@ -21,7 +21,7 @@ This QoS configuration uses **7 priority levels**.
 | 7 | P2P | P2P or manually limited traffic |
 
 使用前：
-![image](https://github.com/tty228/mikrotik-scripts/blob/main/others/2026-03-07-115435.png)
+![image](https://github.com/tty228/mikrotik-scripts/blob/main/other/2026-03-07-115435.png)
 
 使用后：
-![image](https://github.com/tty228/mikrotik-scripts/blob/main/others/2026-03-07-124628.png)
+![image](https://github.com/tty228/mikrotik-scripts/blob/main/other/2026-03-07-124628.png)
