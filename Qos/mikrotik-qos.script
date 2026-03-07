@@ -4,17 +4,18 @@
 ########################################################################
 
 ################# 使用前请阅读脚本说明 #################
-# 此 Qos 脚本未考虑某些无效流量处理（如无效的 DNS 查询请求），建议配合黑洞路由等规则使用，或自行根据使用环境修改
-# 未编写删除原有规则的命令，使用前请确保 用户配置（必填） 的变量名正确，并删除原有规则 ip firewall mangle、ipv6 firewall mangle、queue type、queue tree
 # 此脚本基于 J4125 千兆宽带编写，已自带部分设置，如果这和你的使用环境不一致，请自行调整（保留宽带、突发宽带、最大宽带）
+# 未编写删除原有规则的命令，使用前请确保 用户配置（必填） 的变量名正确，如果是二次导入或者已有其他 QoS 规则，使用前需要删除原有规则 ip firewall mangle、ipv6 firewall mangle、queue type、queue tree 处的 QoS 规则
+# 此 Qos 脚本未考虑某些无效流量处理（如无效地址的 DNS 查询请求），建议配合黑洞路由等规则使用，或自行根据使用环境修改规则
+# 此规则存在误杀部分隧道流量现象，如需调整优先级，请自行根据使用环境修改规则
+# steam P2P 上传时存在优先级偏高的现象，但此特征与普通文件传输类似，未做特殊处理
+# 迅雷 P2P 特征为 UDP 0-300 小包，懒得专门做匹配了，在 [Misc] P2P port (Upload) 标记规则中添加了其使用的默认端口号
 
 # 防火墙：
 # 需要手动限速的客户端，请在 [Misc] P2P limited user 规则中自行添加 MAC 地址
 # 链路标记设置为标记所有连接，如需考虑性能，自行设置检测新连接 Connection State=new，重启生效；"[QoS] Mark Connection" 规则尽量放在防火墙最前列，以保证使用效果
-# [Misc] TCP multi-conn 使用 connection-limit=4,0, packet-size=600-65535 （此规则会误伤部分隧道流量，但 multi-conn 优先级高于 Big packets，影响不大）
-# [Max] Big packets 标记规则中添加了端口号，避免将网页浏览数据包降级（如有自建 web 服务自行添加端口号，如原规则中的 8888），[Max] Big packets 规则中，因部分下载服务（如 steam）使用 80 端口，此处移除 80 端口
-# [Misc] P2P port (Upload) 标记规则中添加了迅雷默认端口号，其使用 UDP 0-300 小包上传，实在不想匹配了
-# [L1] Router local traffic 数据量过大且标记精度不足，改为使用 [L1] Router DNS 仅标记 dns 流量，如使用其他 dns 服务，改为使用的端口号，或启用 [L1] Router local traffic
+# [L1] Router DNS 仅标记 dns 流量，如使用其他 dns 服务，改为使用的端口号，或改为启用 [L1] Router local traffic
+# 如有自建 web 服务且流量较大，可以在 Web ports 规则中自行添加端口号，如规则中的 8888，[Max] Big packets 规则中，因部分下载服务（如 steam）使用 80 端口，此处移除 80 端口，并非缺漏
 
 # 队列选项：
 # cake 队列基于使用环境设置了选项，请根据自身环境调整：
@@ -267,18 +268,18 @@ add cake-ack-filter=filter cake-atm=atm cake-diffserv=diffserv4 \
 /queue tree
 add comment="CAKE Upload Root" max-limit=52M name=cake-upload parent=\
     "$wanInterface" queue=cake-upload
-add burst-limit=30M burst-threshold=28M burst-time=10s limit-at=1M max-limit=\
+add burst-limit=30M burst-threshold=15M burst-time=10s limit-at=1M max-limit=\
     20M name=up-lv1 packet-mark=L1_Micro_up parent=cake-upload priority=1 \
     queue=default
-add burst-limit=30M burst-threshold=28M burst-time=10s limit-at=1M max-limit=\
+add burst-limit=30M burst-threshold=15M burst-time=10s limit-at=1M max-limit=\
     20M name=up-lv2 packet-mark=L2_Mid_up parent=cake-upload priority=2 \
     queue=default
-add burst-limit=40M burst-threshold=35M burst-time=10s limit-at=2M max-limit=\
+add burst-limit=40M burst-threshold=25M burst-time=10s limit-at=2M max-limit=\
     30M name=up-lv3 packet-mark=L3_Web_Browse_up parent=cake-upload priority=\
     3 queue=default
 add name=up-lv4 packet-mark=no-mark parent=cake-upload priority=4 queue=\
     default
-add burst-limit=40M burst-threshold=25M burst-time=30s max-limit=30M name=\
+add burst-limit=40M burst-threshold=25M burst-time=10s max-limit=30M name=\
     up-shared parent=cake-upload priority=5 queue=default
 add name=up-lv5 packet-mark=Multiple_up parent=up-shared priority=1 queue=\
     default
@@ -287,10 +288,10 @@ add max-limit=10M name=up-p2p packet-mark=P2p_up parent=up-shared priority=3 \
     queue=default
 add comment="CAKE Download Root" max-limit=920M name=cake-download parent=\
     "$bridgeName" queue=cake-download
-add burst-limit=300M burst-threshold=280M burst-time=10s limit-at=5M \
+add burst-limit=300M burst-threshold=150M burst-time=10s limit-at=5M \
     max-limit=200M name=down-lv1 packet-mark=L1_Micro_down parent=\
     cake-download priority=1 queue=default
-add burst-limit=300M burst-threshold=280M burst-time=10s limit-at=5M \
+add burst-limit=300M burst-threshold=150M burst-time=10s limit-at=5M \
     max-limit=200M name=down-lv2 packet-mark=L2_Mid_down parent=cake-download \
     priority=2 queue=default
 add burst-limit=800M burst-threshold=420M burst-time=10s limit-at=20M \

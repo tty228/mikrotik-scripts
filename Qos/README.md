@@ -20,6 +20,9 @@ This QoS configuration uses **7 priority levels**.
 | 6 | Max | Large packet transfers |
 | 7 | P2P | P2P or manually limited traffic |
 
+firewall mangle：
+![image](https://github.com/tty228/mikrotik-scripts/blob/main/other/ScreenShot_2026-03-07_205641_431.png)
+
 使用前：
 ![image](https://github.com/tty228/mikrotik-scripts/blob/main/other/2026-03-07-115435.png)
 
