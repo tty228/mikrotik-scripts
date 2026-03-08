@@ -7,7 +7,7 @@
 # 此脚本基于 J4125 千兆宽带编写，已自带部分设置，如果这和你的使用环境不一致，请自行调整（保留宽带、突发宽带、最大宽带）
 # 未编写删除原有规则的命令，使用前请确保 用户配置（必填） 的变量名正确，如果是二次导入或者已有其他 QoS 规则，使用前需要删除原有规则 ip firewall mangle、ipv6 firewall mangle、queue type、queue tree 处的 QoS 规则
 # 此 Qos 脚本未考虑某些无效流量处理（如无效地址的 DNS 查询请求），建议配合黑洞路由等规则使用，或自行根据使用环境修改规则
-# 此规则存在误杀部分隧道流量现象，如需调整优先级，请自行根据使用环境修改规则
+# 此规则存在误杀部分隧道流量现象，如需调整优先级，请自行根据使用环境修改规则，如 [Max] Big packets 中忽略的 11010 端口
 # steam P2P 上传时存在优先级偏高的现象，但此特征与普通文件传输类似，未做特殊处理
 # 迅雷 P2P 特征为 UDP 0-300 小包，懒得专门做匹配了，在 [Misc] P2P port (Upload) 标记规则中添加了其使用的默认端口号
 
@@ -15,7 +15,8 @@
 # 需要手动限速的客户端，请在 [Misc] P2P limited user 规则中自行添加 MAC 地址
 # 链路标记设置为标记所有连接，如需考虑性能，自行设置检测新连接 Connection State=new，重启生效；"[QoS] Mark Connection" 规则尽量放在防火墙最前列，以保证使用效果
 # [L1] Router DNS 仅标记 dns 流量，如使用其他 dns 服务，改为使用的端口号，或改为启用 [L1] Router local traffic
-# 如有自建 web 服务且流量较大，可以在 Web ports 规则中自行添加端口号，如规则中的 8888，[Max] Big packets 规则中，因部分下载服务（如 steam）使用 80 端口，此处移除 80 端口，并非缺漏
+# 如有自建 web 服务且流量较大，可以在 [Max] Big packets 规则中自行添加端口号，如规则中的 8888，因部分下载服务（如 steam）使用 80 端口，此处移除 80 端口，并非缺漏
+# [L4] Web resources detect 规则有助于网页流量的识别率，connection-bytes 可以使用 0-1M ~ 0-5M，但建议不要使用太高的数值，因为很多下载器都会使用 80/443 端口下载，过大的数值会导致连接建立时的流量未被标记
 
 # 队列选项：
 # cake 队列基于使用环境设置了选项，请根据自身环境调整：
@@ -60,7 +61,7 @@ add action=mark-packet chain=forward comment=\
     yes new-packet-mark=P2p_up passthrough=no src-mac-address=\
     C8:58:C0:29:79:DA
 add action=mark-packet chain=forward comment="[Misc] P2P port (Upload)" \
-    connection-mark=Conn_Upload disabled=yes new-packet-mark=P2p_up \
+    connection-mark=Conn_Upload disabled=yes new-packet-mark=Big_down \
     passthrough=no protocol=tcp src-port=12345,15000,54321
 add action=mark-packet chain=forward comment="[Misc] P2P port (Upload)" \
     connection-mark=Conn_Upload new-packet-mark=P2p_up passthrough=no \
@@ -90,9 +91,9 @@ add action=mark-packet chain=forward comment=\
     Conn_Download new-packet-mark=L2_Mid_down packet-size=0-600 passthrough=\
     no protocol=tcp src-port=80,443,8888
 add action=mark-packet chain=forward comment=\
-    "[L2] Web ports (\E2\89\A4600B, TCP 80/443, Upload)" connection-limit=\
-    !4,32 connection-mark=Conn_Upload dst-port=80,443,8888 new-packet-mark=\
-    L2_Mid_up packet-size=0-600 passthrough=no protocol=tcp
+    "[L2] Web ports (\E2\89\A4600B, TCP 80/443, Upload)" connection-mark=\
+    Conn_Upload dst-port=80,443,8888 new-packet-mark=L2_Mid_up packet-size=\
+    0-600 passthrough=no protocol=tcp
 add action=mark-packet chain=forward comment=\
     "[L2] QUIC (\E2\89\A4600B, UDP 443, Download)" connection-mark=\
     Conn_Download new-packet-mark=L2_Mid_down packet-size=0-600 passthrough=\
@@ -130,16 +131,21 @@ add action=mark-packet chain=forward comment=\
     Conn_Download new-packet-mark=L3_Web_Browse_down packet-size=0-1200 \
     passthrough=no protocol=tcp src-port=80,443,8888
 add action=mark-packet chain=forward comment=\
-    "[L3] Web ports (\E2\89\A41200B, TCP 80/443, Upload)" connection-limit=\
-    !4,32 connection-mark=Conn_Upload dst-port=80,443,8888 new-packet-mark=\
-    L3_Web_Browse_up packet-size=0-1200 passthrough=no protocol=tcp
+    "[L3] Web ports (\E2\89\A41200B, TCP 80/443, Upload)" connection-mark=\
+    Conn_Upload dst-port=80,443,8888 new-packet-mark=L3_Web_Browse_up \
+    packet-size=0-1200 passthrough=no protocol=tcp
+add action=mark-packet chain=forward comment=\
+    "[L4] Web resources detect (\E2\89\A41MB, TCP 80/443, Download)" \
+    connection-bytes=0-1000000 connection-mark=Conn_Download new-packet-mark=\
+    no-mark packet-size=1200-65535 passthrough=no protocol=tcp src-port=\
+    80,443,8888
 add action=mark-packet chain=forward comment=\
     "[Max] Big packets (\E2\89\A51200B, Download)" connection-mark=\
     Conn_Download new-packet-mark=Big_down packet-size=1200-65535 \
-    passthrough=no protocol=tcp src-port=!443,8888
+    passthrough=no protocol=tcp src-port=!443,8888,11010
 add action=mark-packet chain=forward comment=\
     "[Max] Big packets (\E2\89\A51200B, Upload)" connection-mark=Conn_Upload \
-    dst-port=!443,8888 new-packet-mark=Big_up packet-size=1200-65535 \
+    dst-port=!443,8888,11010 new-packet-mark=Big_up packet-size=1200-65535 \
     passthrough=no protocol=tcp
 add action=mark-packet chain=forward comment=\
     "[Misc] TCP multi-conn (\E2\89\A54, Download)" connection-limit=4,0 \
@@ -163,8 +169,8 @@ add action=mark-packet chain=forward comment=\
     yes new-packet-mark=P2p_up passthrough=no src-mac-address=\
     C8:58:C0:29:79:DA
 add action=mark-packet chain=forward comment="[Misc] P2P port (Upload)" \
-    connection-mark=Conn_Upload disabled=yes new-packet-mark=P2p_up \
-    passthrough=no protocol=tcp src-port=53918
+    connection-mark=Conn_Upload disabled=yes new-packet-mark=Big_down \
+    passthrough=no protocol=tcp src-port=12345,15000,54321
 add action=mark-packet chain=forward comment="[Misc] P2P port (Upload)" \
     connection-mark=Conn_Upload new-packet-mark=P2p_up passthrough=no \
     protocol=udp src-port=12345,15000,54321
@@ -236,12 +242,17 @@ add action=mark-packet chain=forward comment=\
     Conn_Upload dst-port=80,443,8888 new-packet-mark=L3_Web_Browse_up \
     packet-size=0-1200 passthrough=no protocol=tcp
 add action=mark-packet chain=forward comment=\
+    "[L4] Web resources detect (\E2\89\A41MB, TCP 80/443, Download)" \
+    connection-bytes=0-1000000 connection-mark=Conn_Download new-packet-mark=\
+    no-mark packet-size=1200-65535 passthrough=no protocol=tcp src-port=\
+    80,443,8888
+add action=mark-packet chain=forward comment=\
     "[Max] Big packets (\E2\89\A51280B, Download)" connection-mark=\
     Conn_Download new-packet-mark=Big_down packet-size=1200-65535 \
-    passthrough=no protocol=tcp src-port=!443,8888
+    passthrough=no protocol=tcp src-port=!443,8888,11010
 add action=mark-packet chain=forward comment=\
     "[Max] Big packets (\E2\89\A51280B, Upload)" connection-mark=Conn_Upload \
-    dst-port=!443,8888 new-packet-mark=Big_up packet-size=1200-65535 \
+    dst-port=!443,8888,11010 new-packet-mark=Big_up packet-size=1200-65535 \
     passthrough=no protocol=tcp
 add action=mark-packet chain=forward comment=\
     "[Misc] TCP multi-conn (\E2\89\A54, Download)" connection-limit=4,0 \
