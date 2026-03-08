@@ -88,10 +88,10 @@ add action=mark-packet chain=output comment=\
 add action=mark-packet chain=forward comment=\
     "[L2] Web ports (\E2\89\A4600B, TCP 80/443, Download)" connection-mark=\
     Conn_Download new-packet-mark=L2_Mid_down packet-size=0-600 passthrough=\
-    no protocol=tcp src-port=443,8888
+    no protocol=tcp src-port=80,443,8888
 add action=mark-packet chain=forward comment=\
     "[L2] Web ports (\E2\89\A4600B, TCP 80/443, Upload)" connection-limit=\
-    !4,32 connection-mark=Conn_Upload dst-port=443,8888 new-packet-mark=\
+    !4,32 connection-mark=Conn_Upload dst-port=80,443,8888 new-packet-mark=\
     L2_Mid_up packet-size=0-600 passthrough=no protocol=tcp
 add action=mark-packet chain=forward comment=\
     "[L2] QUIC (\E2\89\A4600B, UDP 443, Download)" connection-mark=\
