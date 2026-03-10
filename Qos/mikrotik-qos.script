@@ -61,7 +61,7 @@ add action=mark-packet chain=forward comment=\
     yes new-packet-mark=P2p_up passthrough=no src-mac-address=\
     C8:58:C0:29:79:DA
 add action=mark-packet chain=forward comment="[Misc] P2P port (Upload)" \
-    connection-mark=Conn_Upload disabled=yes new-packet-mark=Big_down \
+    connection-mark=Conn_Upload disabled=yes new-packet-mark=P2p_up \
     passthrough=no protocol=tcp src-port=12345,15000,54321
 add action=mark-packet chain=forward comment="[Misc] P2P port (Upload)" \
     connection-mark=Conn_Upload new-packet-mark=P2p_up passthrough=no \
@@ -169,7 +169,7 @@ add action=mark-packet chain=forward comment=\
     yes new-packet-mark=P2p_up passthrough=no src-mac-address=\
     C8:58:C0:29:79:DA
 add action=mark-packet chain=forward comment="[Misc] P2P port (Upload)" \
-    connection-mark=Conn_Upload disabled=yes new-packet-mark=Big_down \
+    connection-mark=Conn_Upload disabled=yes new-packet-mark=P2p_up \
     passthrough=no protocol=tcp src-port=12345,15000,54321
 add action=mark-packet chain=forward comment="[Misc] P2P port (Upload)" \
     connection-mark=Conn_Upload new-packet-mark=P2p_up passthrough=no \
