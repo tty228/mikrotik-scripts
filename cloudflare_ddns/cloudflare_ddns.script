@@ -85,167 +85,165 @@
 ################# 主程序 #################
 :foreach domainRecord in=$DomainsToUpdate do={
 
-	# === 拆分域名列表 ===
-	:set CFdomain [:pick $domainRecord 0 [:find $domainRecord "|"]]
-	:set recordType [:pick $domainRecord ([:find $domainRecord "|"] + 1) [:len $domainRecord]]
+    # === 拆分域名列表 ===
+    :set CFdomain [:pick $domainRecord 0 [:find $domainRecord "|"]]
+    :set recordType [:pick $domainRecord ([:find $domainRecord "|"] + 1) [:len $domainRecord]]
 
-	# === 初始化 lastUpdateTime 变量 ===
-	:if ([:len ($lastUpdateTime)] = 0) do={ :set $lastUpdateTime 0 }
+    # === 初始化 lastUpdateTime 变量 ===
+    :if ([:len ($lastUpdateTime)] = 0) do={ :set $lastUpdateTime 0 }
 
-	# === 获取当前 WAN IP ===
-	:if ($recordType = "A") do={
-		:set currentIP [/ip address get [/ip address find interface=$CFiface] address]
-		:set WANip [:pick $currentIP 0 [:find $currentIP "/"]]
-		:set previousIP $previousIPv4
-		:if ($Debug) do={ :log info "[DEBUG] WAN IPv4 地址: $WANip" }
-	} else={
-		:if ([/ipv6 dhcp-client get [find interface=$CFiface6] status] = "bound") do={
-			:set Dhcpv6Prefix [/ipv6 dhcp-client get [find interface=$CFiface6 status=bound] prefix]
-			:set Dhcpv6prefixBase [:pick $Dhcpv6Prefix 0 [:find $Dhcpv6Prefix "::/"]]
-			:if ($Debug) do={ :log info "[DEBUG] IPv6 前缀: $Dhcpv6prefixBase" }
-			:if ([:len $LANipv6end] > 0) do={
-				:set WANip ([:pick $Dhcpv6Prefix 0 [:find $Dhcpv6Prefix "::/"]] . $LANipv6end)
-				:set WANip ($Dhcpv6prefixBase . $LANipv6end)
-			} else={
-				:if ([:len $MacTarget] > 0) do={
-					:foreach n in=[/ipv6 neighbor find where mac-address=$MacTarget] do={
-						:set NeighborAddr [/ipv6 neighbor get $n address]
-						:set NeighborAddrPrefix [:pick $NeighborAddr 0 ([:len $Dhcpv6prefixBase])]
-						:set NeighborPrefixCheck [:pick $NeighborAddr 0 2]
-						# 比较 neighbor 地址的前缀和 DHCPv6 拿到的前缀
-						:if ($NeighborAddrPrefix = $Dhcpv6prefixBase) do={
-							:set WANip $NeighborAddr
-						}
-					}
-				}
-			}
-			:set previousIP $previousIPv6
-			:if ($Debug) do={ :log info "[DEBUG] WAN IPv6 地址: $WANip" }
-		} else={
-			:log warning "无法获取 WAN IPv6 地址，请检查接口设置。"
-		}
-	}
+    # === 获取当前 WAN IP ===
+    :if ($recordType = "A") do={
+        :set currentIP [/ip address get [/ip address find interface=$CFiface] address]
+        :set WANip [:pick $currentIP 0 [:find $currentIP "/"]]
+        :set previousIP $previousIPv4
+        :if ($Debug) do={ :log info "[DEBUG] 设备 WAN IPv4 地址: $WANip" }
+    } else={
+        :if ([/ipv6 dhcp-client get [find interface=$CFiface6] status] = "bound") do={
+            :set Dhcpv6Prefix [/ipv6 dhcp-client get [find interface=$CFiface6 status=bound] prefix]
+            :set Dhcpv6prefixBase [:pick $Dhcpv6Prefix 0 [:find $Dhcpv6Prefix "::/"]]
+            :if ($Debug) do={ :log info "[DEBUG] IPv6 前缀: $Dhcpv6prefixBase" }
+            :if ([:len $LANipv6end] > 0) do={
+                :set WANip ([:pick $Dhcpv6Prefix 0 [:find $Dhcpv6Prefix "::/"]] . $LANipv6end)
+                :set WANip ($Dhcpv6prefixBase . $LANipv6end)
+            } else={
+                :if ([:len $MacTarget] > 0) do={
+                    :foreach n in=[/ipv6 neighbor find where mac-address=$MacTarget] do={
+                        :set NeighborAddr [/ipv6 neighbor get $n address]
+                        :set NeighborAddrPrefix [:pick $NeighborAddr 0 ([:len $Dhcpv6prefixBase])]
+                        :set NeighborPrefixCheck [:pick $NeighborAddr 0 2]
+                        # 比较 neighbor 地址的前缀和 DHCPv6 拿到的前缀
+                        :if ($NeighborAddrPrefix = $Dhcpv6prefixBase) do={
+                            :set WANip $NeighborAddr
+                        }
+                    }
+                }
+            }
+            :set previousIP $previousIPv6
+            :if ($Debug) do={ :log info "[DEBUG] 设备 WAN IPv6 地址: $WANip" }
+        } else={
+            :log warning "无法获取设备 WAN IPv6 地址，请检查接口设置。"
+        }
+    }
 
-	# === 判断是否需要更新 ===
-	:if (($totalSeconds - $lastUpdateTime) > $forceInterval) do={
-		:set doForce true
-	}
+    # === 判断是否需要更新 ===
+    :if (($totalSeconds - $lastUpdateTime) > $forceInterval) do={
+        :set doForce true
+    }
 
-	:if ($Debug) do={
-		:set secondsPassed ($totalSeconds - $lastUpdateTime)
-		:log info "[DEBUG] 距离上次更新已经 $secondsPassed 秒"
-	}
+    :if ($Debug) do={
+        :set secondsPassed ($totalSeconds - $lastUpdateTime)
+        :log info "[DEBUG] 距离上次更新已经 $secondsPassed 秒"
+    }
 
-	:if (($WANip != "") and ($WANip != $previousIP)) do={
-		:if ($Debug) do={ :log info "[DEBUG] 缓存的 IP : $previousIP" }
-		:set needUpdate true
-	} else={
-		:if (($WANip != "") and ($doForce)) do={
-			:if ($Debug) do={ :log info "[DEBUG] 超过强制时间间隔，强制检查更新" }
-			:set needUpdate true
-		}
-	}
+    :if (($WANip != "") and ($WANip != $previousIP)) do={
+        :if ($Debug) do={ :log info "[DEBUG] 缓存的 IP : $previousIP" }
+        :set needUpdate true
+    } else={
+        :if (($WANip != "") and ($doForce)) do={
+            :if ($Debug) do={ :log info "[DEBUG] 超过强制时间间隔，强制检查更新" }
+            :set needUpdate true
+        }
+    }
 
-	# === 域名解析 ===
-	:if ($needUpdate and ($WANip != "")) do={
-		:if ($Debug) do={ :log info "[DEBUG] 处理 $CFdomain → $WANip" }
+    # === 域名解析 ===
+    :if ($needUpdate and ($WANip != "")) do={
+        :if ($Debug) do={ :log info "[DEBUG] 处理 $CFdomain → $WANip" }
 
-		# === 获取已有域名解析记录 ===
-		:set recordLookupUrl "https://api.cloudflare.com/client/v4/zones/$CFzoneid/dns_records?type=$recordType&name=$CFdomain"
-		:set authHeader "Authorization: Bearer $CFtoken"
+        # === 获取已有域名解析记录 ===
+        :set recordLookupUrl "https://api.cloudflare.com/client/v4/zones/$CFzoneid/dns_records?type=$recordType&name=$CFdomain"
+        :set authHeader "Authorization: Bearer $CFtoken"
 
-		:if ($Debug) do={
-			:log info "[DEBUG] 查询记录: $recordLookupUrl"
-		}
+        :if ($Debug) do={
+            :log info "[DEBUG] 查询记录: $recordLookupUrl"
+        }
 
-		:set result [/tool fetch mode=https url=$recordLookupUrl \
-			http-header-field=("$authHeader,Content-Type: application/json") \
-			as-value output=user]
+        :set result [/tool fetch mode=https url=$recordLookupUrl \
+            http-header-field=("$authHeader,Content-Type: application/json") \
+            as-value output=user]
 
-		:set response ($result->"data")
+        :set response ($result->"data")
 
-		:if ($Debug) do={
-			:log info "[DEBUG] API 响应内容: $response"
-		}
+        :if ($Debug) do={
+            :log info "[DEBUG] API 响应内容: $response"
+        }
 
-		:if ([:find $response "\"id\":\""] > 0) do={
-			:set recordId [:pick $response ([:find $response "\"id\":\""] + 6) [:find $response "\",\"" [:find $response "\"id\":\""]]]
-		}
+        :if ([:find $response "\"id\":\""] > 0) do={
+            :set recordId [:pick $response ([:find $response "\"id\":\""] + 6) [:find $response "\",\"" [:find $response "\"id\":\""]]]
+        }
 
-		:if ([:find $response "\"content\":\""] > 0) do={
-			:set recordIP [:pick $response ([:find $response "\"content\":\""] + 11) [:find $response "\"" ([:find $response "\"content\":\""] + 11)]]
-		}
-			
-		# 缓存提交成功的 IP 记录
-		:if ($recordIP != "") do={
-			:if ($recordType = "A") do={
-				:set previousIPv4 $recordIP
-			} else={
-				:set previousIPv6 $recordIP
-			}
-		}
+        :if ([:find $response "\"content\":\""] > 0) do={
+            :set recordIP [:pick $response ([:find $response "\"content\":\""] + 11) [:find $response "\"" ([:find $response "\"content\":\""] + 11)]]
+        }
+            
+        # 缓存提交成功的 IP 记录
+        :if ($recordIP != "") do={
+            :if ($recordType = "A") do={
+                :set previousIPv4 $recordIP
+            } else={
+                :set previousIPv6 $recordIP
+            }
+        }
 
-		:if ($Debug) do={
-			:log info "[DEBUG] 当前解析 IP: $recordIP，Cloudflare 记录 ID: $recordId"
-		}
+        :if ($Debug) do={
+            :log info "[DEBUG] 当前解析 IP: $recordIP，Cloudflare 记录 ID: $recordId"
+        }
 
-		# === 比较是否需要更新 ===
-		:if ($recordIP != $WANip) do={
-			:set postData "{\"type\":\"$recordType\",\"name\":\"$CFdomain\",\"content\":\"$WANip\",\"ttl\":$CFttl,\"proxied\":false}"
+        # === 比较是否需要更新 ===
+        :if ($recordIP != $WANip) do={
+            :set postData "{\"type\":\"$recordType\",\"name\":\"$CFdomain\",\"content\":\"$WANip\",\"ttl\":$CFttl,\"proxied\":false}"
 
-			# === 提交域名解析记录 ===
-			:if ($recordId != "") do={
-				:set updateUrl "https://api.cloudflare.com/client/v4/zones/$CFzoneid/dns_records/$recordId"
-				:set httpMethod "put"
-				:if ($Debug) do={
-					:log info "[DEBUG] 正在更新记录: $updateUrl"
-					:log info "[DEBUG] 提交数据: $postData"
-				}
-			} else={
-				# 创建新记录
-				:set updateUrl "https://api.cloudflare.com/client/v4/zones/$CFzoneid/dns_records"
-				:set httpMethod "post"
-				:if ($Debug) do={
-					:log info "[DEBUG] 未找到记录，正在创建新记录: $CFdomain"
-					:log info "[DEBUG] 提交数据: $postData"
-				}
-			}
-			:set result [/tool fetch http-method=$httpMethod mode=https url=$updateUrl \
-				http-header-field=("$authHeader,Content-Type: application/json") \
-				http-data=$postData as-value output=user]
-			:set response ($result->"data")
-			# 检查是否成功
-			:if ([:find $response "\"success\":true"] > 0) do={
-				:log info "[DDNS] 已更新 $CFdomain：$recordIP → $WANip"
+            # === 提交域名解析记录 ===
+            :if ($recordId != "") do={
+                :set updateUrl "https://api.cloudflare.com/client/v4/zones/$CFzoneid/dns_records/$recordId"
+                :set httpMethod "put"
+                :if ($Debug) do={
+                    :log info "[DEBUG] 正在更新记录: $updateUrl"
+                    :log info "[DEBUG] 提交数据: $postData"
+                }
+            } else={
+                # 创建新记录
+                :set updateUrl "https://api.cloudflare.com/client/v4/zones/$CFzoneid/dns_records"
+                :set httpMethod "post"
+                :if ($Debug) do={
+                    :log info "[DEBUG] 未找到记录，正在创建新记录: $CFdomain"
+                    :log info "[DEBUG] 提交数据: $postData"
+                }
+            }
+            :set result [/tool fetch http-method=$httpMethod mode=https url=$updateUrl \
+                http-header-field=("$authHeader,Content-Type: application/json") \
+                http-data=$postData as-value output=user]
+            :set response ($result->"data")
+            # 检查是否成功
+            :if ([:find $response "\"success\":true"] > 0) do={
+                :log info "[DDNS] 已更新 $CFdomain：$recordIP → $WANip"
 
-				# 缓存提交成功的 IP 记录
-				:if ($recordType = "A") do={
-					:set previousIPv4 $WANip
-				} else={
-					:set previousIPv6 $WANip
-				}
-			} else={
-				:log warning "[DDNS] 更新失败，未更新缓存。响应: $updateResp"
-				:set allRecordsUpdated false
-			}
-		} else={
-			:log info "[DDNS] $CFdomain 的 IP 与记录一致，无需更新。"
-		}
+                # 缓存提交成功的 IP 记录
+                :if ($recordType = "A") do={
+                    :set previousIPv4 $WANip
+                } else={
+                    :set previousIPv6 $WANip
+                }
+            } else={
+                :log warning "[DDNS] 更新失败，未更新缓存。响应: $updateResp"
+                :set allRecordsUpdated false
+            }
+        } else={
+            :log info "[DDNS] $CFdomain 的 IP 与记录一致，无需更新。"
+        }
 
-	} else={
-		:if ($WANip = "") do={
-			:log warning "[DDNS] $CFdomain 无法获取 IP，跳过。"
-			:set allRecordsUpdated false
-		} else={
-			:log info "[DDNS] $CFdomain 与缓存的 IP 一致，跳过更新。"
-			:set allRecordsUpdated false
-		}
-	}
+    } else={
+        :if ($WANip = "") do={
+            :log warning "[DDNS] $CFdomain 无法获取设备 IP，跳过。"
+            :set allRecordsUpdated false
+        } else={
+            :log info "[DDNS] $CFdomain 与缓存的 IP 一致，跳过更新。"
+            :set allRecordsUpdated false
+        }
+    }
 }
 
 :if ($allRecordsUpdated) do={
-	:set lastUpdateTime $totalSeconds
-	:if ($Debug) do={ :log info "[DEBUG] 全部记录成功，更新时间戳为 $lastUpdateTime" }
-} else={
-	:log warning "[DDNS] 部分记录更新失败或已跳过，将在下次运行时重试。"
+    :set lastUpdateTime $totalSeconds
+    :if ($Debug) do={ :log info "[DEBUG] 全部记录成功，更新时间戳为 $lastUpdateTime" }
 }
